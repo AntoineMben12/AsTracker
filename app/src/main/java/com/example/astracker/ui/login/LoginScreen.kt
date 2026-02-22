@@ -47,12 +47,18 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import com.example.astracker.ui.common.UiState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.drawBehind
@@ -86,41 +92,61 @@ val Gradient4 = Color(0xFF23d5ab)
 
 @Composable
 fun LoginScreen(
+    viewModel: AuthViewModel,
     onNavigateToRegister: () -> Unit,
     onNavigateToAssignmentList: () -> Unit
 ) {
-    var isDarkTheme by remember { mutableStateOf(false) } // Local state for demo, ideally lifted up
+    var isDarkTheme by remember { mutableStateOf(false) }
+    val loginState by viewModel.loginState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    // React to login state changes
+    LaunchedEffect(loginState) {
+        when (val state = loginState) {
+            is UiState.Success -> {
+                viewModel.resetLoginState()
+                onNavigateToAssignmentList()
+            }
+            is UiState.Error -> snackbarHostState.showSnackbar(state.message)
+            else -> Unit
+        }
+    }
 
     AsTrackerTheme(darkTheme = isDarkTheme) {
         val backgroundColor = if (isDarkTheme) BackgroundDark else BackgroundLight
-        
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(backgroundColor)
-        ) {
-            // Animated Background
-            AnimatedGradientBackground()
-            
-            // Blobs
-            PulsingBlobs(isDarkTheme)
 
-            // Content
+        Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            containerColor = backgroundColor
+        ) { padding ->
             Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
-            ) {
-                LoginForm(isDarkTheme, onNavigateToRegister, onNavigateToAssignmentList)
-            }
-
-            // Theme Toggle
-            ThemeToggleButton(
-                isDarkTheme = isDarkTheme,
-                onToggle = { isDarkTheme = !isDarkTheme },
                 modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(24.dp)
-            )
+                    .fillMaxSize()
+                    .padding(padding)
+            ) {
+                AnimatedGradientBackground()
+                PulsingBlobs(isDarkTheme)
+
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    LoginForm(
+                        isDarkTheme = isDarkTheme,
+                        isLoading = loginState is UiState.Loading,
+                        onNavigateToRegister = onNavigateToRegister,
+                        onSignIn = { email, password -> viewModel.login(email, password) }
+                    )
+                }
+
+                ThemeToggleButton(
+                    isDarkTheme = isDarkTheme,
+                    onToggle = { isDarkTheme = !isDarkTheme },
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(24.dp)
+                )
+            }
         }
     }
 }
@@ -196,8 +222,9 @@ fun PulsingBlobs(isDarkTheme: Boolean) {
 @Composable
 fun LoginForm(
     isDarkTheme: Boolean,
+    isLoading: Boolean = false,
     onNavigateToRegister: () -> Unit,
-    onNavigateToAssignmentList: () -> Unit
+    onSignIn: (String, String) -> Unit
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -335,22 +362,28 @@ fun LoginForm(
 
             // Sign In Button
             Button(
-                onClick = {
-                    // Simulate login validation
-                    onNavigateToAssignmentList()
-                },
+                onClick = { onSignIn(email, password) },
+                enabled = !isLoading,
                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryColor),
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(50.dp)
             ) {
-                Text(
-                    text = "Sign In",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White
-                )
+                if (isLoading) {
+                    CircularProgressIndicator(
+                        color = Color.White,
+                        strokeWidth = 2.dp,
+                        modifier = Modifier.size(20.dp)
+                    )
+                } else {
+                    Text(
+                        text = "Sign In",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color.White
+                    )
+                }
             }
             
             // Sign Up Link
@@ -395,8 +428,4 @@ fun ThemeToggleButton(
     }
 }
 
-@Preview(showBackground = true)
-@Composable
-fun LoginScreenPreview() {
-    LoginScreen(onNavigateToRegister = {}, onNavigateToAssignmentList = {})
-}
+// Preview removed — LoginScreen now requires AuthViewModel

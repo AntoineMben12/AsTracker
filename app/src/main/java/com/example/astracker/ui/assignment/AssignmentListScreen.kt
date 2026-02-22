@@ -31,6 +31,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.astracker.ui.common.UiState
+import com.example.astracker.ui.assignment.AssignmentViewModel
+import com.example.astracker.network.models.AssignmentDto
 import com.example.astracker.ui.theme.AsTrackerTheme
 
 // Custom Colors from HTML
@@ -45,21 +48,20 @@ val TextDark = Color(0xFFf9fafb)
 
 @Composable
 fun AssignmentListScreen(
+    viewModel: AssignmentViewModel,
     onNavigateToLogin: () -> Unit = {},
     onNavigateToProfile: () -> Unit = {},
     onNavigateToAddAssignment: () -> Unit = {},
     onNavigateToDeadline: () -> Unit = {},
     onNavigateToNotification: () -> Unit = {}
 ) {
-    var isDarkTheme by remember { mutableStateOf(false) } // Local state for toggle
+    var isDarkTheme by remember { mutableStateOf(false) }
     val backgroundColor = if (isDarkTheme) BackgroundDark else BackgroundLight
     val textPrimary = if (isDarkTheme) TextDark else TextLight
-    val textSecondary = if (isDarkTheme) Color.Gray else Color.Gray
+
+    val assignmentsState by viewModel.assignments.collectAsState()
 
     AsTrackerTheme(darkTheme = isDarkTheme) {
-        val systemUiController = remember { SystemUiControllerFake() } // Placeholder for system UI control
-        // In a real app, use Accompanist SystemUIController or EdgeToEdge
-
         Scaffold(
             containerColor = backgroundColor,
             floatingActionButton = {
@@ -88,45 +90,78 @@ fun AssignmentListScreen(
                     .padding(paddingValues)
                     .padding(horizontal = 24.dp)
             ) {
-                // Header
                 Spacer(modifier = Modifier.height(16.dp))
                 HeaderSection(isDarkTheme, onThemeToggle = { isDarkTheme = !isDarkTheme })
-                
                 Spacer(modifier = Modifier.height(24.dp))
-                
-                // Search Bar
                 SearchBar(isDarkTheme)
-                
                 Spacer(modifier = Modifier.height(24.dp))
-                
-                // Filter Chips
                 FilterSection(isDarkTheme)
-                
                 Spacer(modifier = Modifier.height(24.dp))
-                
-                // Content List
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth(),
-                    verticalArrangement = Arrangement.spacedBy(16.dp),
-                    contentPadding = PaddingValues(bottom = 80.dp) // Space for FAB/BottomBar
-                ) {
-                    item {
-                        DueTodaySection(isDarkTheme)
+
+                when (val state = assignmentsState) {
+                    is UiState.Loading -> {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            CircularProgressIndicator(color = PrimaryColor)
+                        }
                     }
-                    
-                    item {
-                        Text(
-                            text = "Upcoming",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = textPrimary,
-                            modifier = Modifier.padding(bottom = 16.dp, top = 8.dp)
-                        )
+                    is UiState.Error -> {
+                        Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            Text(state.message, color = Color.Red, fontSize = 14.sp)
+                        }
                     }
-                    
-                    items(upcomingTasks) { task ->
-                        UpcomingTaskCard(task, isDarkTheme)
+                    is UiState.Success -> {
+                        val list = state.data
+                        val today = java.time.LocalDate.now().toString()
+                        val dueToday = list.filter { it.dueDate.startsWith(today) }
+                        val upcoming = list.filter { !it.dueDate.startsWith(today) }
+
+                        LazyColumn(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(16.dp),
+                            contentPadding = PaddingValues(bottom = 80.dp)
+                        ) {
+                            if (dueToday.isNotEmpty()) {
+                                item {
+                                    Text(
+                                        "Due Today",
+                                        fontSize = 18.sp, fontWeight = FontWeight.Bold, color = textPrimary,
+                                        modifier = Modifier.padding(bottom = 8.dp)
+                                    )
+                                }
+                                items(dueToday) { assignment ->
+                                    AssignmentCard(assignment, isDarkTheme,
+                                        onComplete = { viewModel.markComplete(assignment._id) },
+                                        onDelete = { viewModel.deleteAssignment(assignment._id) }
+                                    )
+                                }
+                            }
+
+                            item {
+                                Text(
+                                    "Upcoming",
+                                    fontSize = 18.sp, fontWeight = FontWeight.Bold, color = textPrimary,
+                                    modifier = Modifier.padding(bottom = 8.dp, top = 8.dp)
+                                )
+                            }
+                            if (upcoming.isEmpty()) {
+                                item {
+                                    Text(
+                                        "No upcoming assignments 🎉",
+                                        color = Color.Gray, fontSize = 14.sp,
+                                        modifier = Modifier.padding(vertical = 16.dp)
+                                    )
+                                }
+                            } else {
+                                items(upcoming) { assignment ->
+                                    AssignmentCard(assignment, isDarkTheme,
+                                        onComplete = { viewModel.markComplete(assignment._id) },
+                                        onDelete = { viewModel.deleteAssignment(assignment._id) }
+                                    )
+                                }
+                            }
+                        }
                     }
+                    else -> {}
                 }
             }
         }
@@ -565,27 +600,75 @@ fun Modifier.customShadow(
     shape = shape,
     spotColor = spotColor
 )
-// Data Models
-data class UpcomingTask(
-    val subject: String,
-    val type: String,
-    val title: String,
-    val date: String,
-    val color: Color
-)
-
-val upcomingTasks = listOf(
-    UpcomingTask("Physics", "Lab Report", "Motion Dynamics", "Tomorrow, 10:00 AM", Color(0xFFfb923c)), // Orange
-    UpcomingTask("History", "Essay", "The Industrial Revolution", "Wed, Oct 24", Color(0xFF22c55e))   // Green
-)
-
-// Fake SystemUiController for preview
-class SystemUiControllerFake {
-    fun setSystemBarsColor(color: Color) {}
-}
-
-@Preview
+// ── API assignment card ────────────────────────────────────────────────────────
 @Composable
-fun AssignmentListScreenPreview() {
-    AssignmentListScreen()
+fun AssignmentCard(assignment: AssignmentDto, isDarkTheme: Boolean, onComplete: () -> Unit, onDelete: () -> Unit) {
+    val priorityColor = when (assignment.priority) {
+        "High" -> Color(0xFFEF4444)
+        "Medium" -> Color(0xFFF59E0B)
+        else -> Color(0xFF10B981)
+    }
+    Card(
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = if (isDarkTheme) SurfaceDark else SurfaceLight),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(modifier = Modifier.height(IntrinsicSize.Min)) {
+            Box(modifier = Modifier.width(6.dp).fillMaxHeight().background(priorityColor))
+            Column(modifier = Modifier.padding(16.dp).weight(1f)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Box(
+                        modifier = Modifier
+                            .background(priorityColor.copy(alpha = 0.1f), RoundedCornerShape(4.dp))
+                            .padding(horizontal = 6.dp, vertical = 2.dp)
+                    ) {
+                        Text(assignment.subject, color = priorityColor, fontSize = 10.sp, fontWeight = FontWeight.Bold)
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Text("• ${assignment.type}", color = Color.Gray, fontSize = 10.sp)
+                    Spacer(Modifier.weight(1f))
+                    Text(
+                        assignment.status.uppercase(),
+                        color = when (assignment.status) {
+                            "completed" -> Color(0xFF10B981)
+                            "overdue" -> Color(0xFFEF4444)
+                            else -> Color.Gray
+                        },
+                        fontSize = 9.sp, fontWeight = FontWeight.Bold
+                    )
+                }
+                Spacer(Modifier.height(4.dp))
+                Text(assignment.title, fontSize = 16.sp, fontWeight = FontWeight.Bold,
+                    color = if (isDarkTheme) TextDark else TextLight)
+                Spacer(Modifier.height(6.dp))
+                LinearProgressIndicator(
+                    progress = { assignment.progress / 100f },
+                    modifier = Modifier.fillMaxWidth().height(4.dp).clip(RoundedCornerShape(2.dp)),
+                    color = priorityColor
+                )
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Rounded.CalendarToday, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(assignment.dueDate.take(10), fontSize = 12.sp, color = Color.Gray, modifier = Modifier.weight(1f))
+                    if (assignment.status != "completed") {
+                        TextButton(onClick = onComplete, contentPadding = PaddingValues(0.dp)) {
+                            Text("Mark Done", fontSize = 11.sp, color = Color(0xFF10B981))
+                        }
+                    }
+                    IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                        Icon(Icons.Rounded.Delete, contentDescription = "Delete", tint = Color.Red.copy(alpha = 0.7f), modifier = Modifier.size(16.dp))
+                    }
+                }
+            }
+        }
+    }
 }
+
+// ── Helpers kept for bottom nav / static UI ────────────────────────────────────
+class SystemUiControllerFake
+
+// Preview stub
+// @Preview
+// fun AssignmentListScreenPreview() { AssignmentListScreen(viewModel = fakeVM) }

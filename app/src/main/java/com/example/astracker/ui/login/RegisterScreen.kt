@@ -27,12 +27,25 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextFieldDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import com.example.astracker.ui.common.UiState
+import com.example.astracker.ui.login.AuthViewModel
+import com.example.astracker.ui.login.BackgroundDark
+import com.example.astracker.ui.login.BackgroundLight
+import com.example.astracker.ui.login.AnimatedGradientBackground
+import com.example.astracker.ui.login.PrimaryColor
+import com.example.astracker.ui.login.PulsingBlobs
+import com.example.astracker.ui.login.ThemeToggleButton
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
@@ -45,41 +58,58 @@ import com.example.astracker.ui.theme.AsTrackerTheme
 
 @Composable
 fun RegisterScreen(
+    viewModel: AuthViewModel,
     onNavigateToLogin: () -> Unit,
     onNavigateToAssignmentList: () -> Unit
 ) {
     var isDarkTheme by remember { mutableStateOf(false) }
+    val registerState by viewModel.registerState.collectAsState()
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    LaunchedEffect(registerState) {
+        when (val state = registerState) {
+            is UiState.Success -> {
+                viewModel.resetRegisterState()
+                onNavigateToAssignmentList()
+            }
+            is UiState.Error -> snackbarHostState.showSnackbar(state.message)
+            else -> Unit
+        }
+    }
 
     AsTrackerTheme(darkTheme = isDarkTheme) {
         val backgroundColor = if (isDarkTheme) BackgroundDark else BackgroundLight
-        
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(backgroundColor)
-        ) {
-            // Animated Background
-            AnimatedGradientBackground()
-            
-            // Blobs
-            PulsingBlobs(isDarkTheme)
 
-            // Content
+        Scaffold(
+            snackbarHost = { SnackbarHost(snackbarHostState) },
+            containerColor = backgroundColor
+        ) { padding ->
             Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center
+                modifier = Modifier.fillMaxSize().padding(padding)
             ) {
-                RegisterForm(isDarkTheme, onNavigateToLogin, onNavigateToAssignmentList)
-            }
+                AnimatedGradientBackground()
+                PulsingBlobs(isDarkTheme)
 
-            // Theme Toggle
-            ThemeToggleButton(
-                isDarkTheme = isDarkTheme,
-                onToggle = { isDarkTheme = !isDarkTheme },
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(24.dp)
-            )
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    RegisterForm(
+                        isDarkTheme = isDarkTheme,
+                        isLoading = registerState is UiState.Loading,
+                        onNavigateToLogin = onNavigateToLogin,
+                        onSignUp = { name, email, password ->
+                            viewModel.register(name, email, password)
+                        }
+                    )
+                }
+
+                ThemeToggleButton(
+                    isDarkTheme = isDarkTheme,
+                    onToggle = { isDarkTheme = !isDarkTheme },
+                    modifier = Modifier.align(Alignment.TopEnd).padding(24.dp)
+                )
+            }
         }
     }
 }
@@ -88,8 +118,9 @@ fun RegisterScreen(
 @Composable
 fun RegisterForm(
     isDarkTheme: Boolean,
+    isLoading: Boolean = false,
     onNavigateToLogin: () -> Unit,
-    onNavigateToAssignmentList: () -> Unit
+    onSignUp: (String, String, String) -> Unit
 ) {
     var fullname by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
@@ -265,22 +296,17 @@ fun RegisterForm(
 
             // Sign Up Button
             Button(
-                onClick = {
-                    // Simulate registration logic
-                    onNavigateToAssignmentList()
-                },
+                onClick = { onSignUp(fullname, email, password) },
+                enabled = !isLoading && confirmPassword == password,
                 colors = ButtonDefaults.buttonColors(containerColor = PrimaryColor),
                 shape = RoundedCornerShape(12.dp),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(50.dp)
+                modifier = Modifier.fillMaxWidth().height(50.dp)
             ) {
-                Text(
-                    text = "Sign Up",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color.White
-                )
+                if (isLoading) {
+                    CircularProgressIndicator(color = Color.White, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+                } else {
+                    Text("Sign Up", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Color.White)
+                }
             }
             
             // Sign In Link
@@ -305,8 +331,4 @@ fun RegisterForm(
     }
 }
 
-@Preview(showBackground = true)
-@Composable
-fun RegisterScreenPreview() {
-    RegisterScreen(onNavigateToLogin = {}, onNavigateToAssignmentList = {})
-}
+// Preview removed — RegisterScreen now requires AuthViewModel

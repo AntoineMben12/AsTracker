@@ -40,9 +40,7 @@ android {
 }
 
 dependencies {
-
     implementation(libs.androidx.compose.material.icons.extended)
-    // Ensure you also have the Material3 dependency (which you already do)
     implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
@@ -51,8 +49,23 @@ dependencies {
     implementation(libs.androidx.compose.ui)
     implementation(libs.androidx.compose.ui.graphics)
     implementation(libs.androidx.compose.ui.tooling.preview)
-    implementation(libs.androidx.compose.material3)
     implementation(libs.androidx.navigation.compose)
+
+    // Retrofit + OkHttp + Gson
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.gson)
+    implementation(libs.okhttp.logging)
+    implementation(libs.gson)
+
+    // ViewModel + Compose
+    implementation(libs.lifecycle.viewmodel.compose)
+
+    // DataStore (token persistence)
+    implementation(libs.datastore.preferences)
+
+    // Coroutines
+    implementation(libs.kotlinx.coroutines.android)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
