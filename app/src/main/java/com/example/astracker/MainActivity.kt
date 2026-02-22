@@ -83,17 +83,13 @@ fun AppNavigation() {
         }
 
         composable("addAssignment") {
-            val vm: AssignmentViewModel = viewModel(factory = factory)
             AddAssignmentScreen(
-                viewModel = vm,
                 onBack = { navController.popBackStack() }
             )
         }
 
         composable("deadline") {
-            val vm: AssignmentViewModel = viewModel(factory = factory)
             DeadlineScreen(
-                viewModel = vm,
                 onBack = { navController.popBackStack() },
                 onNavigateToTasks = {
                     navController.navigate("assignmentList") {
@@ -107,9 +103,7 @@ fun AppNavigation() {
         }
 
         composable("notification") {
-            val vm: NotificationViewModel = viewModel(factory = factory)
             NotificationScreen(
-                viewModel = vm,
                 onBack = { navController.popBackStack() },
                 onNavigateToTasks = {
                     navController.navigate("assignmentList") {
@@ -122,9 +116,7 @@ fun AppNavigation() {
         }
 
         composable("profile") {
-            val vm: ProfileViewModel = viewModel(factory = factory)
             ProfileScreen(
-                viewModel = vm,
                 onBack = { navController.popBackStack() },
                 onLogout = {
                     navController.navigate("login") {

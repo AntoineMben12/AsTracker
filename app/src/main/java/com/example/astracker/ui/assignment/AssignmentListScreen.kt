@@ -111,7 +111,13 @@ fun AssignmentListScreen(
                     }
                     is UiState.Success -> {
                         val list = state.data
-                        val today = java.time.LocalDate.now().toString()
+                        val calendar = java.util.Calendar.getInstance()
+                        val today = String.format(
+                            "%04d-%02d-%02d",
+                            calendar.get(java.util.Calendar.YEAR),
+                            calendar.get(java.util.Calendar.MONTH) + 1,
+                            calendar.get(java.util.Calendar.DAY_OF_MONTH)
+                        )
                         val dueToday = list.filter { it.dueDate.startsWith(today) }
                         val upcoming = list.filter { !it.dueDate.startsWith(today) }
 
@@ -461,61 +467,6 @@ fun TaskItem(isDarkTheme: Boolean, text: String, isChecked: Boolean) {
     }
 }
 
-@Composable
-fun UpcomingTaskCard(task: UpcomingTask, isDarkTheme: Boolean) {
-    Card(
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = if (isDarkTheme) SurfaceDark else SurfaceLight),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Row(modifier = Modifier.height(IntrinsicSize.Min)) {
-            // Colored Bar
-            Box(
-                modifier = Modifier
-                    .width(6.dp)
-                    .fillMaxHeight()
-                    .background(task.color)
-            )
-            
-            Column(modifier = Modifier.padding(16.dp).weight(1f)) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .background(task.color.copy(alpha = 0.1f), RoundedCornerShape(4.dp))
-                            .padding(horizontal = 6.dp, vertical = 2.dp)
-                    ) {
-                        Text(task.subject, color = task.color, fontSize = 10.sp, fontWeight = FontWeight.Bold)
-                    }
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("• ${task.type}", color = Color.Gray, fontSize = 10.sp)
-                }
-                
-                Spacer(modifier = Modifier.height(4.dp))
-                Text(
-                    text = task.title,
-                    fontSize = 16.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = if (isDarkTheme) TextDark else TextLight
-                )
-                
-                 Spacer(modifier = Modifier.height(8.dp))
-                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Rounded.CalendarToday, contentDescription = null, tint = Color.Gray, modifier = Modifier.size(14.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(task.date, fontSize = 12.sp, color = Color.Gray)
-                 }
-            }
-            
-            Box(
-                modifier = Modifier.padding(16.dp).align(Alignment.Top).size(32.dp).background(if (isDarkTheme) Color(0xFF374151) else Color(0xFFf9fafb), CircleShape),
-                contentAlignment = Alignment.Center
-            ) {
-                 Icon(Icons.Rounded.Edit, contentDescription = "Edit", tint = Color.Gray, modifier = Modifier.size(16.dp))
-            }
-        }
-    }
-}
 
 @Composable
 fun BottomNavigationBar(
