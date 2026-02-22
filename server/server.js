@@ -1,4 +1,11 @@
-require('dotenv').config();
+const path = require('path');
+require('dotenv').config({ path: path.join(__dirname, '.env') });
+
+if (!process.env.MONGO_URI) {
+    console.error('❌ Error: MONGO_URI is not defined in environment variables.');
+    process.exit(1);
+}
+
 const connectDB = require('./src/config/db');
 const app = require('./src/app');
 
