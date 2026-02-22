@@ -47,7 +47,7 @@ const loginValidators = [
  * @route POST /api/auth/register
  * @access Public
  */
-const register = async (req, res, next) => {
+const register = async (req, res) => {
     try {
         const { name, email, password, major, year } = req.body;
 
@@ -62,7 +62,7 @@ const register = async (req, res, next) => {
         const user = await User.create({ name, email, password, major, year });
         sendTokenResponse(user, 201, res);
     } catch (err) {
-        next(err);
+        res.status(500).json({ success: false, error: err.message });
     }
 };
 
