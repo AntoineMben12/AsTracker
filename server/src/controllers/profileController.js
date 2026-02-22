@@ -64,7 +64,40 @@ const updateProfile = async (req, res, next) => {
             runValidators: true,
         });
 
-        res.status(200).json({ success: true, data: user });
+        // Fetch assignment stats so the response matches ProfileResponse shape
+        const userId = user._id;
+        const [total, completed, overdue, pending] = await Promise.all([
+            Assignment.countDocuments({ userId }),
+            Assignment.countDocuments({ userId, status: 'completed' }),
+            Assignment.countDocuments({ userId, status: 'overdue' }),
+            Assignment.countDocuments({ userId, status: 'pending' }),
+        ]);
+        const progressAgg = await Assignment.aggregate([
+            { $match: { userId } },
+            { $group: { _id: null, avg: { $avg: '$progress' } } },
+        ]);
+        const avgProgress = progressAgg.length > 0 ? Math.round(progressAgg[0].avg) : 0;
+
+        res.status(200).json({
+            success: true,
+            data: {
+                user: {
+                    id: user._id,
+                    name: user.name,
+                    email: user.email,
+                    major: user.major,
+                    year: user.year,
+                    avatarUrl: user.avatarUrl,
+                },
+                stats: {
+                    totalAssignments: total,
+                    completed,
+                    active: pending,
+                    overdue,
+                    avgProgress,
+                },
+            },
+        });
     } catch (err) {
         next(err);
     }

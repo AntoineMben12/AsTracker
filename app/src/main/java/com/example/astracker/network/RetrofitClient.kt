@@ -9,9 +9,7 @@ import java.util.concurrent.TimeUnit
 
 object RetrofitClient {
 
-    // 10.0.2.2 is the Android emulator alias for the host machine's localhost.
-    // For a real device, replace with your machine's LAN IP: e.g. "http://192.168.1.x:5000/api/"
-    private const val BASE_URL = "http://10.0.2.2:5000/api/"
+    private const val BASE_URL = "https://astracker-backend.onrender.com/api/"
 
     private var tokenManager: TokenManager? = null
 

@@ -1,6 +1,7 @@
 const jwt = require('jsonwebtoken');
 const { body } = require('express-validator');
 const User = require('../models/User');
+const Assignment = require('../models/Assignment');
 
 // Utility to generate signed JWT
 const signToken = (id) =>
@@ -96,15 +97,49 @@ const login = async (req, res, next) => {
 };
 
 /**
- * @desc  Get currently logged-in user
+ * @desc  Get currently logged-in user (with stats) — matches ProfileResponse shape
  * @route GET /api/auth/me
  * @access Private
  */
-const getMe = async (req, res) => {
-    res.status(200).json({
-        success: true,
-        user: req.user,
-    });
+const getMe = async (req, res, next) => {
+    try {
+        const userId = req.user._id;
+
+        const [total, completed, overdue, pending] = await Promise.all([
+            Assignment.countDocuments({ userId }),
+            Assignment.countDocuments({ userId, status: 'completed' }),
+            Assignment.countDocuments({ userId, status: 'overdue' }),
+            Assignment.countDocuments({ userId, status: 'pending' }),
+        ]);
+        const progressAgg = await Assignment.aggregate([
+            { $match: { userId } },
+            { $group: { _id: null, avg: { $avg: '$progress' } } },
+        ]);
+        const avgProgress = progressAgg.length > 0 ? Math.round(progressAgg[0].avg) : 0;
+
+        res.status(200).json({
+            success: true,
+            data: {
+                user: {
+                    id: req.user._id,
+                    name: req.user.name,
+                    email: req.user.email,
+                    major: req.user.major,
+                    year: req.user.year,
+                    avatarUrl: req.user.avatarUrl,
+                },
+                stats: {
+                    totalAssignments: total,
+                    completed,
+                    active: pending,
+                    overdue,
+                    avgProgress,
+                },
+            },
+        });
+    } catch (err) {
+        next(err);
+    }
 };
 
 module.exports = {
