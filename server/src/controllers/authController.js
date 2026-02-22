@@ -71,7 +71,7 @@ const register = async (req, res) => {
  * @route POST /api/auth/login
  * @access Public
  */
-const login = async (req, res, next) => {
+const login = async (req, res) => {
     try {
         const { email, password } = req.body;
 
@@ -92,7 +92,7 @@ const login = async (req, res, next) => {
 
         sendTokenResponse(user, 200, res);
     } catch (err) {
-        next(err);
+        res.status(500).json({ success: false, error: err.message });
     }
 };
 
@@ -101,7 +101,7 @@ const login = async (req, res, next) => {
  * @route GET /api/auth/me
  * @access Private
  */
-const getMe = async (req, res, next) => {
+const getMe = async (req, res) => {
     try {
         const userId = req.user._id;
 
@@ -138,7 +138,7 @@ const getMe = async (req, res, next) => {
             },
         });
     } catch (err) {
-        next(err);
+        res.status(500).json({ success: false, error: err.message });
     }
 };
 
