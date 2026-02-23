@@ -47,7 +47,7 @@ const loginValidators = [
  * @route POST /api/auth/register
  * @access Public
  */
-const register = async (req, res) => {
+const register = async (req, res, next) => {
     try {
         const { name, email, password, major, year } = req.body;
 
@@ -62,7 +62,7 @@ const register = async (req, res) => {
         const user = await User.create({ name, email, password, major, year });
         sendTokenResponse(user, 201, res);
     } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
+        next(err);
     }
 };
 
@@ -71,7 +71,7 @@ const register = async (req, res) => {
  * @route POST /api/auth/login
  * @access Public
  */
-const login = async (req, res) => {
+const login = async (req, res, next) => {
     try {
         const { email, password } = req.body;
 
@@ -92,7 +92,7 @@ const login = async (req, res) => {
 
         sendTokenResponse(user, 200, res);
     } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
+        next(err);
     }
 };
 
@@ -101,7 +101,7 @@ const login = async (req, res) => {
  * @route GET /api/auth/me
  * @access Private
  */
-const getMe = async (req, res) => {
+const getMe = async (req, res, next) => {
     try {
         const userId = req.user._id;
 
@@ -138,7 +138,7 @@ const getMe = async (req, res) => {
             },
         });
     } catch (err) {
-        res.status(500).json({ success: false, error: err.message });
+        next(err);
     }
 };
 
