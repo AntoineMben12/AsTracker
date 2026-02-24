@@ -63,6 +63,7 @@ const register = async (req, res, next) => {
         sendTokenResponse(user, 201, res);
     } catch (err) {
         next(err);
+        console.log(registerValidators, User.validate, register)
     }
 };
 
