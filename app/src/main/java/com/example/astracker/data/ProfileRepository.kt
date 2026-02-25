@@ -1,13 +1,13 @@
 package com.example.astracker.data
 
-import com.example.astracker.network.RetrofitClient
+import com.example.astracker.network.ApiClient
 import com.example.astracker.network.models.ProfileDataDto
 import com.example.astracker.network.models.UpdateProfileRequest
 import org.json.JSONObject
 
 class ProfileRepository {
 
-    private val api get() = RetrofitClient.api
+    private val api get() = ApiClient.api
 
     suspend fun getProfile(): Result<ProfileDataDto> {
         return try {

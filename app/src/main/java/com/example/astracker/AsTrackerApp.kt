@@ -2,7 +2,7 @@ package com.example.astracker
 
 import android.app.Application
 import com.example.astracker.data.TokenManager
-import com.example.astracker.network.RetrofitClient
+import com.example.astracker.network.ApiClient
 
 class AsTrackerApp : Application() {
     lateinit var tokenManager: TokenManager
@@ -11,6 +11,6 @@ class AsTrackerApp : Application() {
     override fun onCreate() {
         super.onCreate()
         tokenManager = TokenManager(this)
-        RetrofitClient.init(tokenManager)
+        ApiClient.init(tokenManager)
     }
 }

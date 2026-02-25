@@ -1,12 +1,12 @@
 package com.example.astracker.data
 
-import com.example.astracker.network.RetrofitClient
+import com.example.astracker.network.ApiClient
 import com.example.astracker.network.models.NotificationGroupsDto
 import org.json.JSONObject
 
 class NotificationRepository {
 
-    private val api get() = RetrofitClient.api
+    private val api get() = ApiClient.api
 
     suspend fun getAll(): Result<NotificationGroupsDto> {
         return try {

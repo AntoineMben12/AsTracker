@@ -1,13 +1,13 @@
 package com.example.astracker.data
 
-import com.example.astracker.network.RetrofitClient
+import com.example.astracker.network.ApiClient
 import com.example.astracker.network.models.AuthResponse
 import com.example.astracker.network.models.LoginRequest
 import com.example.astracker.network.models.RegisterRequest
 
 class AuthRepository(private val tokenManager: TokenManager) {
 
-    private val api get() = RetrofitClient.api
+    private val api get() = ApiClient.api
 
     suspend fun login(email: String, password: String): Result<AuthResponse> {
         return try {
