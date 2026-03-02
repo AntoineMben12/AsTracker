@@ -136,8 +136,8 @@ fun AssignmentListScreen(
                                 }
                                 items(dueToday) { assignment ->
                                     AssignmentCard(assignment, isDarkTheme,
-                                        onComplete = { viewModel.markComplete(assignment._id) },
-                                        onDelete = { viewModel.deleteAssignment(assignment._id) }
+                                        onComplete = { viewModel.markComplete(assignment.id) },
+                                        onDelete = { viewModel.deleteAssignment(assignment.id) }
                                     )
                                 }
                             }
@@ -160,8 +160,8 @@ fun AssignmentListScreen(
                             } else {
                                 items(upcoming) { assignment ->
                                     AssignmentCard(assignment, isDarkTheme,
-                                        onComplete = { viewModel.markComplete(assignment._id) },
-                                        onDelete = { viewModel.deleteAssignment(assignment._id) }
+                                        onComplete = { viewModel.markComplete(assignment.id) },
+                                        onDelete = { viewModel.deleteAssignment(assignment.id) }
                                     )
                                 }
                             }
@@ -196,7 +196,7 @@ fun HeaderSection(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
                 color = if (isDarkTheme) Color.Gray else Color.Gray
             )
         }
-        
+
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
             IconButton(
                 onClick = onThemeToggle,
@@ -213,7 +213,7 @@ fun HeaderSection(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
                     tint = if (isDarkTheme) Color.Gray else Color.Gray
                 )
             }
-            
+
             Box(
                 modifier = Modifier
                     .size(40.dp)
@@ -243,7 +243,7 @@ fun HeaderSection(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
 fun SearchBar(isDarkTheme: Boolean) {
     val backgroundColor = if (isDarkTheme) SurfaceDark else SurfaceLight
     val contentColor = if (isDarkTheme) TextDark else TextLight
-    
+
     Box(modifier = Modifier.fillMaxWidth()) {
         TextField(
             value = "",
@@ -288,7 +288,7 @@ fun FilterSection(isDarkTheme: Boolean) {
             val backgroundColor = if (isSelected) PrimaryColor else if (isDarkTheme) SurfaceDark else SurfaceLight
             val textColor = if (isSelected) Color.White else if (isDarkTheme) Color(0xFFd1d5db) else Color(0xFF4b5563)
             val border = if (isSelected) null else if (isDarkTheme)  androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF374151)) else androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFe5e7eb))
-            
+
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
@@ -335,15 +335,15 @@ fun DueTodaySection(isDarkTheme: Boolean) {
         ) {
             Column(modifier = Modifier.padding(20.dp)) {
                 // Border Left Simulate
-                // Note: Compose doesn't have a simple left-border, so we can wrap content or just skip for simplicity 
+                // Note: Compose doesn't have a simple left-border, so we can wrap content or just skip for simplicity
                 // Using a Row with a thin box for the red line
-                
+
                 Row(
                    modifier = Modifier.fillMaxWidth(),
                    horizontalArrangement = Arrangement.SpaceBetween,
                    verticalAlignment = Alignment.Top
                 ) {
-                    
+
                     Box(modifier = Modifier
                         .background(Color(0xFFfee2e2), RoundedCornerShape(4.dp))
                         .padding(horizontal = 10.dp, vertical = 4.dp)
@@ -355,7 +355,7 @@ fun DueTodaySection(isDarkTheme: Boolean) {
                             fontWeight = FontWeight.Bold
                         )
                     }
-                    
+
                     Icon(
                         imageVector = Icons.Rounded.ExpandMore,
                         contentDescription = "Expand",
@@ -363,16 +363,16 @@ fun DueTodaySection(isDarkTheme: Boolean) {
                         modifier = Modifier.size(24.dp)
                     )
                 }
-                
+
                 Spacer(modifier = Modifier.height(12.dp))
-                
+
                 Text(
                     text = "Calculus II: Integration",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = if (isDarkTheme) TextDark else TextLight
                 )
-                
+
                 Text(
                     text = "Chapter 4 exercises on definite integrals and area under curves.",
                     fontSize = 14.sp,
@@ -386,7 +386,7 @@ fun DueTodaySection(isDarkTheme: Boolean) {
                     modifier = Modifier.padding(vertical = 16.dp),
                     color = if (isDarkTheme) Color(0xFF374151) else Color(0xFFf3f4f6)
                 )
-                
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween,
@@ -397,7 +397,7 @@ fun DueTodaySection(isDarkTheme: Boolean) {
                         Spacer(modifier = Modifier.width(4.dp))
                         Text(text = "11:59 PM", color = Color(0xFFef4444), fontWeight = FontWeight.Medium, fontSize = 14.sp)
                     }
-                    
+
                     // Avatar Group Placeholder
                     Box(
                         modifier = Modifier
@@ -408,17 +408,17 @@ fun DueTodaySection(isDarkTheme: Boolean) {
                         Text("M", color = Color(0xFF2563eb), fontSize = 10.sp, fontWeight = FontWeight.Bold)
                     }
                 }
-                
+
                 Spacer(modifier = Modifier.height(20.dp))
-                
+
                 // Tasks
                 TaskItem(isDarkTheme, "Read Chapter 4", true)
                 TaskItem(isDarkTheme, "Complete Practice Problems", true)
                 TaskItem(isDarkTheme, "Review Notes", true)
                 TaskItem(isDarkTheme, "Prepare Final Summary", false)
-                
+
                 Spacer(modifier = Modifier.height(16.dp))
-                
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceBetween
@@ -426,9 +426,9 @@ fun DueTodaySection(isDarkTheme: Boolean) {
                      Text("3/4 tasks completed", fontSize = 12.sp, color = Color.Gray, fontWeight = FontWeight.Medium)
                      Text("75% done", fontSize = 12.sp, color = PrimaryColor, fontWeight = FontWeight.Medium)
                 }
-                
+
                 Spacer(modifier = Modifier.height(16.dp))
-                
+
                 Button(
                     onClick = {},
                     colors = ButtonDefaults.buttonColors(containerColor = PrimaryColor),
@@ -476,7 +476,7 @@ fun BottomNavigationBar(
     onNavigateToProfile: () -> Unit = {}
 ) {
     val backgroundColor = if (isDarkTheme) SurfaceDark else SurfaceLight
-    
+
     Surface(
         color = backgroundColor,
         shadowElevation = 16.dp,

@@ -11,6 +11,7 @@ import com.example.astracker.ui.common.UiState
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import java.util.Calendar
 
 class AssignmentViewModel(
     private val repo: AssignmentRepository = AssignmentRepository()
@@ -27,17 +28,19 @@ class AssignmentViewModel(
 
     init { loadAll() }
 
-    fun loadAll(status: String? = null, priority: String? = null) {
+    fun loadAll(status: String? = null, priority: String? = null, subject: String? = null) {
         viewModelScope.launch {
             _assignments.value = UiState.Loading
-            val result = repo.getAll(status = status, priority = priority)
+            val result = repo.getAll(status = status, priority = priority, subject = subject)
             _assignments.value = result.fold(
                 onSuccess = { UiState.Success(it) },
                 onFailure = { UiState.Error(it.message ?: "Failed to load assignments") }
             )
 
-            // Also refresh stats
-            repo.getStats().onSuccess { _stats.value = it }
+            // Compute stats locally — avoids a second network round-trip
+            result.onSuccess { list ->
+                _stats.value = computeStats(list)
+            }
         }
     }
 
@@ -45,9 +48,10 @@ class AssignmentViewModel(
         title: String,
         description: String,
         subject: String,
-        dueDate: String,
+        dueDate: String,        // Expected as ISO-8601 string, e.g. "2024-12-31T23:59:00+00:00"
         priority: String,
         subtasks: List<SubtaskDto> = emptyList(),
+        tags: List<String> = emptyList(),
         type: String = "Assignment"
     ) {
         if (title.isBlank() || subject.isBlank() || dueDate.isBlank()) {
@@ -57,13 +61,21 @@ class AssignmentViewModel(
         viewModelScope.launch {
             _createState.value = UiState.Loading
             val result = repo.create(
-                CreateAssignmentRequest(title, description, subject, dueDate, priority, subtasks, type = type)
+                CreateAssignmentRequest(
+                    title       = title.trim(),
+                    description = description.trim(),
+                    subject     = subject.trim(),
+                    dueDate     = dueDate,
+                    priority    = priority,
+                    subtasks    = subtasks,
+                    tags        = tags,
+                    type        = type
+                )
             )
             _createState.value = result.fold(
                 onSuccess = { UiState.Success(it) },
                 onFailure = { UiState.Error(it.message ?: "Failed to create assignment") }
             )
-            // Refresh list after create
             if (result.isSuccess) loadAll()
         }
     }
@@ -82,5 +94,30 @@ class AssignmentViewModel(
         }
     }
 
-    fun resetCreateState() { _createState.value = UiState.Idle }
+    fun resetCreateState() {
+        _createState.value = UiState.Idle
+    }
+
+    // ─────────────────────────── Helpers ──────────────────────────────────────
+
+    private fun todayStr(): String {
+        val c = Calendar.getInstance()
+        return "%04d-%02d-%02d".format(
+            c.get(Calendar.YEAR),
+            c.get(Calendar.MONTH) + 1,
+            c.get(Calendar.DAY_OF_MONTH)
+        )
+    }
+
+    private fun computeStats(list: List<AssignmentDto>): AssignmentStatsDto {
+        val today = todayStr()
+        return AssignmentStatsDto(
+            total       = list.size,
+            completed   = list.count { it.status == "completed" },
+            active      = list.count { it.status == "pending"   },
+            overdue     = list.count { it.status == "overdue"   },
+            dueToday    = list.count { it.dueDate.startsWith(today) && it.status != "completed" },
+            avgProgress = if (list.isEmpty()) 0 else list.sumOf { it.progress } / list.size
+        )
+    }
 }

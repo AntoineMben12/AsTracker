@@ -19,9 +19,11 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.astracker.network.models.NotificationDto
+import com.example.astracker.network.models.NotificationGroupsDto
+import com.example.astracker.ui.common.UiState
 import com.example.astracker.ui.theme.AsTrackerTheme
 
 // ── Colour tokens ─────────────────────────────────────────────────────────────
@@ -57,81 +59,63 @@ data class NotifItem(
     val actions: List<NotifAction> = emptyList()
 )
 
-private val notifications = listOf(
-    NotifItem(
-        id = 1,
-        title  = "Assignment Due Soon",
-        body   = " is due in 2 hours. Submit your work now to avoid penalties.",
-        boldWord = "\"Database Systems Project\"",
-        timeLabel = "2h ago",
-        iconBg  = Color(0xFFE0E7FF),
-        iconTint = Primary,
-        icon    = Icons.Rounded.PriorityHigh,
-        hasUnreadDot = true,
-        unreadDotColor = Secondary,
-        group   = NotifGroup.TODAY,
-        actions = listOf(NotifAction("Submit Now", true))
-    ),
-    NotifItem(
-        id = 2,
-        title  = "New Assignment Added",
-        body   = "Prof. Smith added a new assignment . Due date: Oct 25.",
-        boldWord = "\"UX Research Paper\"",
-        timeLabel = "5h ago",
-        iconBg  = Color(0xFFDBEAFE),
-        iconTint = Color(0xFF2563EB),
-        icon    = Icons.Rounded.Add,
-        hasUnreadDot = true,
-        unreadDotColor = Primary,
-        group   = NotifGroup.TODAY,
-        actions = listOf(NotifAction("View Details", false))
-    ),
-    NotifItem(
-        id = 3,
-        title  = "Grade Posted",
-        body   = "Your grade for  is available.",
-        boldWord = "\"Mobile App Mockup\"",
-        timeLabel = "8h ago",
-        iconBg  = Color(0xFFD1FAE5),
-        iconTint = Color(0xFF059669),
-        icon    = Icons.Rounded.Grade,
-        group   = NotifGroup.TODAY
-    ),
-    NotifItem(
-        id = 4,
-        title  = "Reminder: Team Meeting",
-        body   = "Don't forget the group study session for Algorithm Analysis at 4:00 PM in the library.",
-        timeLabel = "Yesterday",
-        iconBg  = Color(0xFFFFEDD5),
-        iconTint = Color(0xFFEA580C),
-        icon    = Icons.Rounded.Schedule,
-        alpha   = 0.75f,
-        group   = NotifGroup.YESTERDAY
-    ),
-    NotifItem(
-        id = 5,
-        title  = "Class Cancelled",
-        body   = "The lecture for  has been cancelled for tomorrow.",
-        boldWord = "\"Introduction to AI\"",
-        timeLabel = "Yesterday",
-        iconBg  = Color(0xFFEDE9FE),
-        iconTint = Color(0xFF7C3AED),
-        icon    = Icons.Rounded.Campaign,
-        alpha   = 0.75f,
-        group   = NotifGroup.YESTERDAY
-    ),
-    NotifItem(
-        id = 6,
-        title  = "Submission Successful",
-        body   = "\"Web Development Lab 3\" was uploaded successfully.",
-        timeLabel = "Mon",
-        iconBg  = Color(0xFFCCFBF1),
-        iconTint = Color(0xFF0D9488),
-        icon    = Icons.Rounded.CheckCircle,
-        alpha   = 0.6f,
-        group   = NotifGroup.EARLIER
+// ── DTO → UI model conversion ─────────────────────────────────────────────────
+
+private fun iconForType(type: String): Triple<Color, Color, ImageVector> = when (type) {
+    "deadline"       -> Triple(Color(0xFFE0E7FF), Primary,            Icons.Rounded.PriorityHigh)
+    "new_assignment" -> Triple(Color(0xFFDBEAFE), Color(0xFF2563EB),  Icons.Rounded.Add)
+    "grade"          -> Triple(Color(0xFFD1FAE5), Color(0xFF059669),  Icons.Rounded.Grade)
+    "reminder"       -> Triple(Color(0xFFFFEDD5), Color(0xFFEA580C),  Icons.Rounded.Schedule)
+    "cancellation"   -> Triple(Color(0xFFEDE9FE), Color(0xFF7C3AED),  Icons.Rounded.Campaign)
+    "submission"     -> Triple(Color(0xFFCCFBF1), Color(0xFF0D9488),  Icons.Rounded.CheckCircle)
+    else             -> Triple(Color(0xFFF3F4F6), Color(0xFF6B7280),  Icons.Rounded.Notifications)
+}
+
+private fun formatTimeLabel(createdAt: String, group: NotifGroup): String {
+    if (createdAt.length < 16) return ""
+    return when (group) {
+        NotifGroup.TODAY -> {
+            val rawTime = createdAt.substring(11, 16) // "HH:mm"
+            val parts   = rawTime.split(":")
+            val h       = parts[0].toIntOrNull() ?: 0
+            val m       = parts.getOrNull(1)?.toIntOrNull() ?: 0
+            val ampm    = if (h >= 12) "PM" else "AM"
+            val h12     = if (h % 12 == 0) 12 else h % 12
+            "%d:%02d %s".format(h12, m, ampm)
+        }
+        NotifGroup.YESTERDAY -> "Yesterday"
+        NotifGroup.EARLIER   -> createdAt.take(10)
+    }
+}
+
+private fun NotificationDto.toNotifItem(group: NotifGroup): NotifItem {
+    val (iconBg, iconTint, icon) = iconForType(type)
+    val alpha = when (group) {
+        NotifGroup.TODAY     -> 1f
+        NotifGroup.YESTERDAY -> 0.75f
+        NotifGroup.EARLIER   -> 0.6f
+    }
+    return NotifItem(
+        id             = id.hashCode(),
+        title          = title,
+        body           = body,
+        boldWord       = boldWord,
+        timeLabel      = formatTimeLabel(createdAt, group),
+        iconBg         = iconBg,
+        iconTint       = iconTint,
+        icon           = icon,
+        hasUnreadDot   = !isRead,
+        unreadDotColor = if (group == NotifGroup.TODAY) Secondary else Primary,
+        alpha          = alpha,
+        group          = group,
+        actions        = actions.map { NotifAction(it.label, it.isPrimary) }
     )
-)
+}
+
+private fun NotificationGroupsDto.toNotifItems(): List<NotifItem> =
+    today.map     { it.toNotifItem(NotifGroup.TODAY)     } +
+    yesterday.map { it.toNotifItem(NotifGroup.YESTERDAY) } +
+    earlier.map   { it.toNotifItem(NotifGroup.EARLIER)   }
 
 private fun groupLabel(group: NotifGroup) = when (group) {
     NotifGroup.TODAY     -> "Today"
@@ -143,15 +127,25 @@ private fun groupLabel(group: NotifGroup) = when (group) {
 @Composable
 fun NotificationScreen(
     isDarkTheme: Boolean = false,
+    viewModel: NotificationViewModel = NotificationViewModel(),
     onBack: () -> Unit = {},
     onNavigateToTasks: () -> Unit = {},
     onNavigateToCalendar: () -> Unit = {},
     onNavigateToProfile: () -> Unit = {}
 ) {
-    val bg  = if (isDarkTheme) BgDark  else BgLight
-    val srf = if (isDarkTheme) SrfDark else SrfLight
-    val txt = if (isDarkTheme) TxtDark else TxtLight
+    val bg    = if (isDarkTheme) BgDark       else BgLight
+    val srf   = if (isDarkTheme) SrfDark      else SrfLight
+    val txt   = if (isDarkTheme) TxtDark      else TxtLight
     val muted = if (isDarkTheme) TxtMutedDark else TxtMuted
+
+    val notifState by viewModel.state.collectAsState()
+    val unreadCount by viewModel.unreadCount.collectAsState()
+
+    // Map server data to local UI model
+    val notifItems: List<NotifItem> = when (val s = notifState) {
+        is UiState.Success -> s.data.toNotifItems()
+        else               -> emptyList()
+    }
 
     AsTrackerTheme(darkTheme = isDarkTheme) {
         Column(
@@ -187,11 +181,11 @@ fun NotificationScreen(
                         modifier   = Modifier.weight(1f),
                         textAlign  = androidx.compose.ui.text.style.TextAlign.Center
                     )
-                    IconButton(onClick = {}) {
+                    IconButton(onClick = { viewModel.markAllRead() }) {
                         Icon(
-                            Icons.Rounded.Settings,
-                            contentDescription = "Settings",
-                            tint = muted
+                            Icons.Rounded.DoneAll,
+                            contentDescription = "Mark all read",
+                            tint = if (unreadCount > 0) Primary else muted
                         )
                     }
                 }
@@ -205,30 +199,109 @@ fun NotificationScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 24.dp),
                 verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
+                // Loading state
+                when (val s = notifState) {
+                    is UiState.Loading -> item {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(48.dp),
+                            contentAlignment = Alignment.Center
+                        ) { CircularProgressIndicator(color = Primary) }
+                    }
+                    is UiState.Error -> item {
+                        Text(
+                            s.message,
+                            color    = Color.Red,
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(8.dp)
+                        )
+                    }
+                    else -> Unit
+                }
+
                 NotifGroup.values().forEach { group ->
-                    val groupItems = notifications.filter { it.group == group }
+                    val groupItems = notifItems.filter { it.group == group }
                     if (groupItems.isEmpty()) return@forEach
 
                     item(key = group.name + "_header") {
                         Text(
-                            text  = groupLabel(group).uppercase(),
-                            fontSize   = 11.sp,
-                            fontWeight = FontWeight.SemiBold,
+                            text          = groupLabel(group).uppercase(),
+                            fontSize      = 11.sp,
+                            fontWeight    = FontWeight.SemiBold,
                             letterSpacing = 1.sp,
-                            color = muted,
-                            modifier = Modifier.padding(start = 8.dp, bottom = 12.dp, top = if (group == NotifGroup.TODAY) 0.dp else 24.dp)
+                            color         = muted,
+                            modifier      = Modifier.padding(
+                                start  = 8.dp,
+                                bottom = 12.dp,
+                                top    = if (group == NotifGroup.TODAY) 0.dp else 24.dp
+                            )
                         )
                     }
 
                     items(groupItems, key = { it.id }) { item ->
                         NotifCard(
-                            item    = item,
-                            isDark  = isDarkTheme,
-                            srf     = srf,
-                            txt     = txt,
-                            muted   = muted
+                            item     = item,
+                            isDark   = isDarkTheme,
+                            srf      = srf,
+                            txt      = txt,
+                            muted    = muted,
+                            onMarkRead = { viewModel.markRead(
+                                notifItems.find { ni -> ni.id == item.id }
+                                    ?.let { ni ->
+                                        when (item.group) {
+                                            NotifGroup.TODAY ->
+                                                (notifState as? UiState.Success)?.data?.today
+                                                    ?.find { it.title == item.title }?.id ?: ""
+                                            NotifGroup.YESTERDAY ->
+                                                (notifState as? UiState.Success)?.data?.yesterday
+                                                    ?.find { it.title == item.title }?.id ?: ""
+                                            NotifGroup.EARLIER ->
+                                                (notifState as? UiState.Success)?.data?.earlier
+                                                    ?.find { it.title == item.title }?.id ?: ""
+                                        }
+                                    } ?: ""
+                            )},
+                            onDelete = { viewModel.delete(
+                                when (item.group) {
+                                    NotifGroup.TODAY ->
+                                        (notifState as? UiState.Success)?.data?.today
+                                            ?.find { it.title == item.title }?.id ?: ""
+                                    NotifGroup.YESTERDAY ->
+                                        (notifState as? UiState.Success)?.data?.yesterday
+                                            ?.find { it.title == item.title }?.id ?: ""
+                                    NotifGroup.EARLIER ->
+                                        (notifState as? UiState.Success)?.data?.earlier
+                                            ?.find { it.title == item.title }?.id ?: ""
+                                }
+                            )}
                         )
                         Spacer(modifier = Modifier.height(12.dp))
+                    }
+                }
+
+                // Empty state
+                if (notifState is UiState.Success && notifItems.isEmpty()) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 48.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                Icon(
+                                    Icons.Rounded.NotificationsNone,
+                                    contentDescription = null,
+                                    tint     = muted,
+                                    modifier = Modifier.size(48.dp)
+                                )
+                                Spacer(modifier = Modifier.height(12.dp))
+                                Text(
+                                    "No notifications yet",
+                                    color    = muted,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -248,24 +321,26 @@ fun NotificationScreen(
 // ── Notification card ─────────────────────────────────────────────────────────
 @Composable
 private fun NotifCard(
-    item:  NotifItem,
-    isDark: Boolean,
-    srf:   Color,
-    txt:   Color,
-    muted: Color
+    item:       NotifItem,
+    isDark:     Boolean,
+    srf:        Color,
+    txt:        Color,
+    muted:      Color,
+    onMarkRead: () -> Unit = {},
+    onDelete:   () -> Unit = {}
 ) {
+</thinking>
     val borderColor = if (isDark) Color(0xFF374151) else Color(0xFFF3F4F6)
 
     Card(
-        shape  = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = srf.copy(alpha = item.alpha)),
+        shape     = RoundedCornerShape(12.dp),
+        colors    = CardDefaults.cardColors(containerColor = srf.copy(alpha = item.alpha)),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        modifier = Modifier
+        modifier  = Modifier
             .fillMaxWidth()
-            .then(
-                Modifier.background(Color.Transparent)
-            )
+            .clickable(enabled = item.hasUnreadDot) { onMarkRead() }
     ) {
+</thinking>
         Row(
             modifier = Modifier.padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
@@ -349,7 +424,7 @@ private fun NotifCard(
                         item.actions.forEach { action ->
                             if (action.isPrimary) {
                                 Button(
-                                    onClick = {},
+                                    onClick = { onMarkRead() },
                                     colors  = ButtonDefaults.buttonColors(containerColor = Primary),
                                     shape   = RoundedCornerShape(8.dp),
                                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
@@ -363,10 +438,25 @@ private fun NotifCard(
                                     color      = Primary,
                                     fontSize   = 12.sp,
                                     fontWeight = FontWeight.SemiBold,
-                                    modifier   = Modifier.clickable {}
+                                    modifier   = Modifier.clickable { onMarkRead() }
                                 )
                             }
                         }
+                    }
+                }
+                // Delete row
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    IconButton(onClick = onDelete, modifier = Modifier.size(28.dp)) {
+                        Icon(
+                            Icons.Rounded.DeleteOutline,
+                            contentDescription = "Delete notification",
+                            tint     = muted,
+                            modifier = Modifier.size(16.dp)
+                        )
                     }
                 }
             }

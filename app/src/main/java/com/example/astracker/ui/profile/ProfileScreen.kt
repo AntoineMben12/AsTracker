@@ -18,9 +18,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.astracker.network.models.ProfileDataDto
+import com.example.astracker.ui.common.UiState
 import com.example.astracker.ui.theme.AsTrackerTheme
 
 // ── Colour tokens ─────────────────────────────────────────────────────────────
@@ -44,11 +45,35 @@ private data class StatItem(
     val icon: ImageVector
 )
 
-private val stats = listOf(
-    StatItem("42",  "Completed", Color(0xFFE0E7FF), Color(0xFF4F46E5), Icons.Rounded.CheckCircle),
-    StatItem("5",   "Active",    Color(0xFFFFEDD5), Color(0xFFEA580C), Icons.Rounded.Assignment),
-    StatItem("2",   "Overdue",   Color(0xFFEEF2FF), Color(0xFF6366F1), Icons.Rounded.PriorityHigh),
-    StatItem("85%", "Avg Score", Color(0xFFFFF7ED), Color(0xFFF97316), Icons.Rounded.TrendingUp)
+private fun buildStats(data: ProfileDataDto): List<StatItem> = listOf(
+    StatItem(
+        value    = data.stats.completed.toString(),
+        label    = "Completed",
+        iconBg   = Color(0xFFE0E7FF),
+        iconTint = Color(0xFF4F46E5),
+        icon     = Icons.Rounded.CheckCircle
+    ),
+    StatItem(
+        value    = data.stats.active.toString(),
+        label    = "Active",
+        iconBg   = Color(0xFFFFEDD5),
+        iconTint = Color(0xFFEA580C),
+        icon     = Icons.Rounded.Assignment
+    ),
+    StatItem(
+        value    = data.stats.overdue.toString(),
+        label    = "Overdue",
+        iconBg   = Color(0xFFEEF2FF),
+        iconTint = Color(0xFF6366F1),
+        icon     = Icons.Rounded.PriorityHigh
+    ),
+    StatItem(
+        value    = "${data.stats.avgProgress}%",
+        label    = "Avg Progress",
+        iconBg   = Color(0xFFFFF7ED),
+        iconTint = Color(0xFFF97316),
+        icon     = Icons.Rounded.TrendingUp
+    )
 )
 
 // ── Settings row data ─────────────────────────────────────────────────────────
@@ -74,16 +99,26 @@ private val supportSettings = listOf(
 @Composable
 fun ProfileScreen(
     isDarkTheme: Boolean = false,
+    viewModel: ProfileViewModel = ProfileViewModel(),
     onBack: () -> Unit = {},
     onLogout: () -> Unit = {},
     onNavigateToTasks: () -> Unit = {},
     onNavigateToCalendar: () -> Unit = {},
     onNavigateToNotification: () -> Unit = {}
 ) {
-    val bg   = if (isDarkTheme) BgDark   else BgLight
-    val card = if (isDarkTheme) CardDark else CardLight
-    val txt  = if (isDarkTheme) TxtDark  else TxtLight
+    val bg    = if (isDarkTheme) BgDark       else BgLight
+    val card  = if (isDarkTheme) CardDark     else CardLight
+    val txt   = if (isDarkTheme) TxtDark      else TxtLight
     val muted = if (isDarkTheme) TxtMutedDark else TxtMuted
+
+    val profileState by viewModel.state.collectAsState()
+
+    // Extract data safely – fall back to placeholders while loading
+    val profileData: ProfileDataDto? = (profileState as? UiState.Success)?.data
+    val displayName  = profileData?.user?.name?.ifBlank { "Student" }  ?: "Loading…"
+    val displayMajor = profileData?.user?.major?.ifBlank { "—" }       ?: ""
+    val displayYear  = profileData?.user?.year ?: 0
+    val statsItems   = profileData?.let { buildStats(it) } ?: emptyList()
 
     AsTrackerTheme(darkTheme = isDarkTheme) {
         Column(
@@ -130,6 +165,30 @@ fun ProfileScreen(
                 ),
                 verticalArrangement = Arrangement.spacedBy(0.dp)
             ) {
+                // ── Loading / error banner ──────────────────────────────────────
+                when (val s = profileState) {
+                    is UiState.Loading -> item {
+                        Box(
+                            modifier = Modifier.fillMaxWidth().padding(24.dp),
+                            contentAlignment = Alignment.Center
+                        ) { CircularProgressIndicator(color = Primary) }
+                    }
+                    is UiState.Error -> item {
+                        Card(
+                            colors   = CardDefaults.cardColors(containerColor = Color(0xFFFEF2F2)),
+                            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp)
+                        ) {
+                            Text(
+                                s.message,
+                                color    = Color(0xFFDC2626),
+                                fontSize = 13.sp,
+                                modifier = Modifier.padding(12.dp)
+                            )
+                        }
+                    }
+                    else -> Unit
+                }
+
                 // ── Avatar + name ───────────────────────────────────────────────
                 item {
                     Column(
@@ -193,46 +252,53 @@ fun ProfileScreen(
                         Spacer(modifier = Modifier.height(16.dp))
 
                         Text(
-                            "Alex Johnson",
-                            fontSize = 24.sp,
+                            displayName,
+                            fontSize   = 24.sp,
                             fontWeight = FontWeight.Bold,
-                            color = txt
+                            color      = txt
                         )
-                        Text(
-                            "Computer Science Major",
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.Medium,
-                            color = muted
-                        )
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Box(
-                            modifier = Modifier
-                                .background(
-                                    if (isDarkTheme) Color(0xFF312E81).copy(0.3f) else Color(0xFFE0E7FF),
-                                    RoundedCornerShape(50)
-                                )
-                                .padding(horizontal = 14.dp, vertical = 4.dp)
-                        ) {
+                        if (displayMajor.isNotBlank()) {
                             Text(
-                                "Year 3",
-                                fontSize = 12.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (isDarkTheme) Color(0xFFA5B4FC) else Color(0xFF4338CA)
+                                "$displayMajor Major",
+                                fontSize   = 14.sp,
+                                fontWeight = FontWeight.Medium,
+                                color      = muted
                             )
+                        }
+                        if (displayYear > 0) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Box(
+                                modifier = Modifier
+                                    .background(
+                                        if (isDarkTheme) Color(0xFF312E81).copy(0.3f)
+                                        else Color(0xFFE0E7FF),
+                                        RoundedCornerShape(50)
+                                    )
+                                    .padding(horizontal = 14.dp, vertical = 4.dp)
+                            ) {
+                                Text(
+                                    "Year $displayYear",
+                                    fontSize   = 12.sp,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color      = if (isDarkTheme) Color(0xFFA5B4FC) else Color(0xFF4338CA)
+                                )
+                            }
                         }
                     }
                 }
 
                 // ── Stats grid ──────────────────────────────────────────────────
-                item {
-                    StatGrid(
-                        stats = stats,
-                        card = card,
-                        txt = txt,
-                        muted = muted,
-                        isDark = isDarkTheme
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
+                if (statsItems.isNotEmpty()) {
+                    item {
+                        StatGrid(
+                            stats  = statsItems,
+                            card   = card,
+                            txt    = txt,
+                            muted  = muted,
+                            isDark = isDarkTheme
+                        )
+                        Spacer(modifier = Modifier.height(24.dp))
+                    }
                 }
 
                 // ── Account Settings ────────────────────────────────────────────
@@ -252,14 +318,16 @@ fun ProfileScreen(
                 // ── Support + Logout ────────────────────────────────────────────
                 item {
                     SettingsGroup(
-                        title = null,
-                        rows = supportSettings,
-                        card = card,
-                        txt = txt,
-                        muted = muted,
-                        isDark = isDarkTheme,
+                        title     = null,
+                        rows      = supportSettings,
+                        card      = card,
+                        txt       = txt,
+                        muted     = muted,
+                        isDark    = isDarkTheme,
                         onRowClick = { row ->
-                            if (row.isDanger) onLogout()
+                            if (row.isDanger) {
+                                viewModel.logout(onComplete = onLogout)
+                            }
                         }
                     )
                 }

@@ -1,6 +1,7 @@
 package com.example.astracker.network.models
 
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.SerialName
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
@@ -37,31 +38,51 @@ data class AuthResponse(
     val user: UserDto
 )
 
+// ── Supabase Profile (maps directly to the profiles table) ────────────────────
+
+@Serializable
+data class SupabaseProfile(
+    val id: String = "",
+    val name: String? = null,
+    val major: String? = null,
+    val year: Int? = null,
+    @SerialName("avatar_url")
+    val avatarUrl: String? = null,
+    @SerialName("updated_at")
+    val updatedAt: String? = null,
+    @SerialName("created_at")
+    val createdAt: String? = null
+)
+
 // ── Assignments ───────────────────────────────────────────────────────────────
 
 @Serializable
 data class SubtaskDto(
-    val _id: String = "",
     val title: String,
     val checked: Boolean = false
 )
 
 @Serializable
 data class AssignmentDto(
-    val id: String,           // Changed from _id to id for Postgres
-    val title: String,
-    val description: String,
-    val subject: String,
+    // Supabase uses UUID 'id', not MongoDB '_id'
+    val id: String = "",
+    val title: String = "",
+    val description: String = "",
+    val subject: String = "",
     @SerialName("due_date")
-    val dueDate: String,
-    val priority: String,      // "Low" | "Medium" | "High"
-    val status: String,        // "pending" | "completed" | "overdue"
+    val dueDate: String = "",
+    val priority: String = "Medium",   // "Low" | "Medium" | "High"
+    val status: String = "pending",    // "pending" | "completed" | "overdue"
     val subtasks: List<SubtaskDto> = emptyList(),
     val progress: Int = 0,
     val tags: List<String> = emptyList(),
     val type: String = "Assignment",
+    @SerialName("user_id")
+    val userId: String = "",
     @SerialName("created_at")
-    val createdAt: String = ""
+    val createdAt: String = "",
+    @SerialName("updated_at")
+    val updatedAt: String = ""
 )
 
 @Serializable
@@ -111,19 +132,26 @@ data class StatsResponse(
 @Serializable
 data class ActionDto(
     val label: String,
-    val isPrimary: Boolean
+    @SerialName("is_primary")
+    val isPrimary: Boolean = false
 )
 
 @Serializable
 data class NotificationDto(
-    val _id: String,
-    val title: String,
-    val body: String,
-    val boldWord: String,
-    val type: String,
-    val isRead: Boolean,
+    // Supabase uses UUID 'id'
+    val id: String = "",
+    val title: String = "",
+    val body: String = "",
+    // Supabase column: bold_word
+    @SerialName("bold_word")
+    val boldWord: String = "",
+    val type: String = "general",
+    // Supabase column: is_read
+    @SerialName("is_read")
+    val isRead: Boolean = false,
     val actions: List<ActionDto> = emptyList(),
-    val createdAt: String
+    @SerialName("created_at")
+    val createdAt: String = ""
 )
 
 @Serializable
@@ -175,6 +203,7 @@ data class UpdateProfileRequest(
     val name: String? = null,
     val major: String? = null,
     val year: Int? = null,
+    @SerialName("avatar_url")
     val avatarUrl: String? = null
 )
 

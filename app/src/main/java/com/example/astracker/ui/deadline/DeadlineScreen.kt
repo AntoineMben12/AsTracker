@@ -24,8 +24,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.astracker.network.models.AssignmentDto
+import com.example.astracker.ui.assignment.AssignmentViewModel
 import com.example.astracker.ui.assignment.PrimaryColor
+import com.example.astracker.ui.common.UiState
 import com.example.astracker.ui.theme.AsTrackerTheme
+import java.util.Calendar
 
 // Colour tokens ─────────────────────────────────────────────────────────────
 private val Urgent      = Color(0xFFEF4444)   // Red-500
@@ -54,46 +58,78 @@ data class DeadlineItem(
     val progress: Float = -1f       // -1 means no progress bar
 )
 
-private val sampleDeadlines = listOf(
-    DeadlineItem(
-        subject     = "Database Systems",
-        description = "Submit ER Diagram and Schema SQL file.",
-        status      = DeadlineStatus.TODAY,
-        timeLabel   = "11:59 PM",
-        dateLabel   = "Due Today",
-        accentColor = Urgent,
-        icon        = Icons.Rounded.PriorityHigh,
-        progress    = 0.85f
-    ),
-    DeadlineItem(
-        subject     = "Web Development",
-        description = "Implement Login and Deadline View.",
-        status      = DeadlineStatus.TOMORROW,
-        timeLabel   = "10:00 AM",
-        dateLabel   = "Tomorrow",
-        accentColor = Secondary,
-        icon        = Icons.Rounded.Code,
-        tags        = listOf("Frontend", "HTML")
-    ),
-    DeadlineItem(
-        subject     = "Calculus II Quiz",
-        description = "Chapter 5: Integration Techniques.",
-        status      = DeadlineStatus.UPCOMING,
-        timeLabel   = "2:00 PM",
-        dateLabel   = "Fri, Oct 27",
-        accentColor = Success,
-        icon        = Icons.Rounded.Calculate
-    ),
-    DeadlineItem(
-        subject     = "History Essay",
-        description = "First draft of research paper due.",
-        status      = DeadlineStatus.NEUTRAL,
-        timeLabel   = "",
-        dateLabel   = "Mon, Oct 30",
-        accentColor = Color(0xFF9CA3AF),
-        icon        = Icons.Rounded.HistoryEdu
-    )
+// ── Conversion: AssignmentDto → DeadlineItem ──────────────────────────────────
+
+private fun calStr(cal: Calendar): String = "%04d-%02d-%02d".format(
+    cal.get(Calendar.YEAR),
+    cal.get(Calendar.MONTH) + 1,
+    cal.get(Calendar.DAY_OF_MONTH)
 )
+
+private fun AssignmentDto.toDeadlineItem(): DeadlineItem {
+    val dueDatePart = dueDate.take(10) // "yyyy-MM-dd"
+
+    val todayCal = Calendar.getInstance()
+    val tomorrowCal = Calendar.getInstance().also { it.add(Calendar.DAY_OF_YEAR, 1) }
+    val today     = calStr(todayCal)
+    val tomorrow  = calStr(tomorrowCal)
+
+    val deadlineStatus = when {
+        dueDatePart == today    -> DeadlineStatus.TODAY
+        dueDatePart == tomorrow -> DeadlineStatus.TOMORROW
+        dueDatePart > today     -> DeadlineStatus.UPCOMING
+        else                    -> DeadlineStatus.NEUTRAL
+    }
+
+    val accentColor = when {
+        deadlineStatus == DeadlineStatus.TODAY                -> Urgent
+        deadlineStatus == DeadlineStatus.TOMORROW             -> Secondary
+        priority == "High"                                    -> Urgent
+        priority == "Medium"                                  -> Secondary
+        else                                                  -> Success
+    }
+
+    val icon = when {
+        subject.contains("Math",     ignoreCase = true) -> Icons.Rounded.Calculate
+        subject.contains("Web",      ignoreCase = true) -> Icons.Rounded.Code
+        subject.contains("Database", ignoreCase = true) -> Icons.Rounded.Storage
+        subject.contains("History",  ignoreCase = true) -> Icons.Rounded.HistoryEdu
+        subject.contains("Science",  ignoreCase = true) -> Icons.Rounded.Science
+        subject.contains("Physics",  ignoreCase = true) -> Icons.Rounded.Science
+        subject.contains("English",  ignoreCase = true) -> Icons.Rounded.MenuBook
+        else                                            -> Icons.Rounded.Assignment
+    }
+
+    // Extract time portion from ISO string, e.g. "2024-01-15T23:59:00+00:00" → "11:59 PM"
+    val timePart = if (dueDate.length >= 16) {
+        val rawTime = dueDate.substring(11, 16) // "HH:mm"
+        val parts   = rawTime.split(":")
+        val h       = parts[0].toIntOrNull() ?: 0
+        val m       = parts.getOrNull(1)?.toIntOrNull() ?: 0
+        val ampm    = if (h >= 12) "PM" else "AM"
+        val h12     = if (h % 12 == 0) 12 else h % 12
+        "%d:%02d %s".format(h12, m, ampm)
+    } else ""
+
+    val dateLabel = when (deadlineStatus) {
+        DeadlineStatus.TODAY    -> "Due Today"
+        DeadlineStatus.TOMORROW -> "Tomorrow"
+        DeadlineStatus.UPCOMING -> dueDatePart
+        DeadlineStatus.NEUTRAL  -> dueDatePart
+    }
+
+    return DeadlineItem(
+        subject     = subject,
+        description = description.ifBlank { title },
+        status      = deadlineStatus,
+        timeLabel   = timePart,
+        dateLabel   = dateLabel,
+        accentColor = accentColor,
+        icon        = icon,
+        tags        = tags,
+        progress    = if (progress > 0) progress / 100f else -1f
+    )
+}
 
 // ── Mini calendar day data ────────────────────────────────────────────────────
 private data class CalendarDay(
@@ -116,6 +152,7 @@ private val weekDays = listOf(
 @Composable
 fun DeadlineScreen(
     isDarkTheme: Boolean = false,
+    viewModel: AssignmentViewModel = AssignmentViewModel(),
     onBack: () -> Unit = {},
     onNavigateToTasks: () -> Unit = {},
     onNavigateToAddAssignment: () -> Unit = {},
@@ -125,6 +162,17 @@ fun DeadlineScreen(
     val bg  = if (isDarkTheme) BgDark  else BgLight
     val srf = if (isDarkTheme) SrfDark else SrfLight
     val txt = if (isDarkTheme) TxtDark else TxtLight
+
+    val assignmentsState by viewModel.assignments.collectAsState()
+
+    // Convert loaded assignments → deadline items, sorted by due date
+    val deadlineItems: List<DeadlineItem> = when (val s = assignmentsState) {
+        is UiState.Success -> s.data
+            .filter { it.status != "completed" }
+            .sortedBy { it.dueDate }
+            .map { it.toDeadlineItem() }
+        else -> emptyList()
+    }
 
     AsTrackerTheme(darkTheme = isDarkTheme) {
         Box(
@@ -138,6 +186,7 @@ fun DeadlineScreen(
                     isDark        = isDarkTheme,
                     srf           = srf,
                     txt           = txt,
+                    totalDue      = deadlineItems.size,
                     onBack        = onBack
                 )
 
@@ -186,15 +235,46 @@ fun DeadlineScreen(
                         }
                     }
 
-                    // Timeline items
-                    items(sampleDeadlines) { item ->
-                        TimelineItem(
-                            item      = item,
-                            isDark    = isDarkTheme,
-                            srf       = srf,
-                            txt       = txt,
-                            isLast    = item == sampleDeadlines.last()
-                        )
+                    // Loading / empty states
+                    when (val s = assignmentsState) {
+                        is UiState.Loading -> item {
+                            Box(
+                                modifier = Modifier.fillMaxWidth().padding(32.dp),
+                                contentAlignment = Alignment.Center
+                            ) { CircularProgressIndicator(color = PrimaryColor) }
+                        }
+                        is UiState.Error -> item {
+                            Text(
+                                s.message,
+                                color    = Color.Red,
+                                fontSize = 13.sp,
+                                modifier = Modifier.padding(8.dp)
+                            )
+                        }
+                        is UiState.Success -> {
+                            if (deadlineItems.isEmpty()) {
+                                item {
+                                    Text(
+                                        "🎉 No upcoming deadlines!",
+                                        color    = TxtMuted,
+                                        fontSize = 14.sp,
+                                        modifier = Modifier.padding(vertical = 24.dp)
+                                    )
+                                }
+                            } else {
+                                // Timeline items
+                                items(deadlineItems) { item ->
+                                    TimelineItem(
+                                        item   = item,
+                                        isDark = isDarkTheme,
+                                        srf    = srf,
+                                        txt    = txt,
+                                        isLast = item == deadlineItems.last()
+                                    )
+                                }
+                            }
+                        }
+                        else -> {}
                     }
                 }
             }
@@ -233,6 +313,7 @@ private fun DeadlineHeader(
     isDark: Boolean,
     srf: Color,
     txt: Color,
+    totalDue: Int = 0,
     onBack: () -> Unit
 ) {
     var viewMode by remember { mutableStateOf("Month") }
@@ -306,9 +387,9 @@ private fun DeadlineHeader(
                         color      = txt
                     )
                     Text(
-                        "5 Assignments due",
-                        fontSize = 13.sp,
-                        color    = TxtMuted,
+                        "$totalDue Assignment${if (totalDue == 1) "" else "s"} due",
+                        fontSize   = 13.sp,
+                        color      = TxtMuted,
                         fontWeight = FontWeight.Medium
                     )
                 }
