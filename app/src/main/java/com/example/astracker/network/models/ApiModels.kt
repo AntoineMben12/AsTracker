@@ -3,6 +3,18 @@ package com.example.astracker.network.models
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.SerialName
 
+// ── Notification creation ─────────────────────────────────────────────────────
+
+@Serializable
+data class CreateNotificationRequest(
+    val title: String,
+    val body: String,
+    @SerialName("bold_word")
+    val boldWord: String = "",
+    val type: String = "general",          // "new_assignment" | "completed" | "deadline" | etc.
+    val actions: List<ActionDto> = emptyList()
+)
+
 // ── Auth ──────────────────────────────────────────────────────────────────────
 
 @Serializable

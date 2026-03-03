@@ -1,5 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="Theme.AsTracker" parent="android:Theme.Material.Light.NoActionBar" />
+    <!-- Base app theme — no action bar, used by MainActivity -->
+    <style name="Theme.AsTracker" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/splash_bg</item>
+        <item name="android:windowIsTranslucent">false</item>
+        <item name="android:windowAnimationStyle">@null</item>
+    </style>
+
+    <!-- Splash window theme — applied to MainActivity while Compose loads.
+         Sets the window background to the same deep navy as SplashScreen so
+         there is zero white flash between process start and first frame draw. -->
+    <style name="Theme.AsTracker.Splash" parent="Theme.AsTracker">
+        <item name="android:windowBackground">@color/splash_bg</item>
+        <item name="android:windowFullscreen">false</item>
+        <item name="android:windowDrawsSystemBarBackgrounds">true</item>
+        <item name="android:statusBarColor">@color/splash_bg</item>
+        <item name="android:navigationBarColor">@color/splash_bg</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+
 </resources>

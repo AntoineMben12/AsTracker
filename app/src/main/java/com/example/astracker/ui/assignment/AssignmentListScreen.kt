@@ -59,6 +59,10 @@ fun AssignmentListScreen(
     val backgroundColor = if (isDarkTheme) BackgroundDark else BackgroundLight
     val textPrimary = if (isDarkTheme) TextDark else TextLight
 
+    // ── Search & filter state ─────────────────────────────────────────────────
+    var searchQuery    by remember { mutableStateOf("") }
+    var selectedFilter by remember { mutableStateOf("All") }
+
     val assignmentsState by viewModel.assignments.collectAsState()
 
     AsTrackerTheme(darkTheme = isDarkTheme) {
@@ -91,11 +95,46 @@ fun AssignmentListScreen(
                     .padding(horizontal = 24.dp)
             ) {
                 Spacer(modifier = Modifier.height(16.dp))
-                HeaderSection(isDarkTheme, onThemeToggle = { isDarkTheme = !isDarkTheme })
+                // Build a live subtitle from the current assignment state
+                val headerSubtitle = run {
+                    val s = assignmentsState
+                    if (s is UiState.Success) {
+                        val cal = java.util.Calendar.getInstance()
+                        val td  = "%04d-%02d-%02d".format(
+                            cal.get(java.util.Calendar.YEAR),
+                            cal.get(java.util.Calendar.MONTH) + 1,
+                            cal.get(java.util.Calendar.DAY_OF_MONTH)
+                        )
+                        val dueTodayCount = s.data.count {
+                            it.dueDate.startsWith(td) && it.status != "completed"
+                        }
+                        val pendingCount  = s.data.count { it.status == "pending" }
+                        when {
+                            dueTodayCount > 0 ->
+                                "$dueTodayCount task${if (dueTodayCount == 1) "" else "s"} due today"
+                            pendingCount > 0  ->
+                                "$pendingCount pending task${if (pendingCount == 1) "" else "s"}"
+                            else              -> "All caught up! 🎉"
+                        }
+                    } else ""
+                }
+                HeaderSection(
+                    isDarkTheme  = isDarkTheme,
+                    onThemeToggle = { isDarkTheme = !isDarkTheme },
+                    subtitle     = headerSubtitle
+                )
                 Spacer(modifier = Modifier.height(24.dp))
-                SearchBar(isDarkTheme)
+                SearchBar(
+                    isDarkTheme  = isDarkTheme,
+                    query        = searchQuery,
+                    onQueryChange = { searchQuery = it }
+                )
                 Spacer(modifier = Modifier.height(24.dp))
-                FilterSection(isDarkTheme)
+                FilterSection(
+                    isDarkTheme      = isDarkTheme,
+                    selectedFilter   = selectedFilter,
+                    onFilterSelected = { selectedFilter = it }
+                )
                 Spacer(modifier = Modifier.height(24.dp))
 
                 when (val state = assignmentsState) {
@@ -110,7 +149,28 @@ fun AssignmentListScreen(
                         }
                     }
                     is UiState.Success -> {
-                        val list = state.data
+                        val rawList = state.data
+
+                        // 1. Apply status filter
+                        val statusFiltered = when (selectedFilter) {
+                            "Pending"   -> rawList.filter { it.status == "pending"   }
+                            "Completed" -> rawList.filter { it.status == "completed" }
+                            "Overdue"   -> rawList.filter { it.status == "overdue"   }
+                            else        -> rawList
+                        }
+
+                        // 2. Apply search query (title OR subject, case-insensitive)
+                        val list = if (searchQuery.isBlank()) {
+                            statusFiltered
+                        } else {
+                            val q = searchQuery.trim().lowercase()
+                            statusFiltered.filter {
+                                it.title.lowercase().contains(q) ||
+                                it.subject.lowercase().contains(q) ||
+                                it.description.lowercase().contains(q)
+                            }
+                        }
+
                         val calendar = java.util.Calendar.getInstance()
                         val today = String.format(
                             "%04d-%02d-%02d",
@@ -118,51 +178,139 @@ fun AssignmentListScreen(
                             calendar.get(java.util.Calendar.MONTH) + 1,
                             calendar.get(java.util.Calendar.DAY_OF_MONTH)
                         )
-                        val dueToday = list.filter { it.dueDate.startsWith(today) }
-                        val upcoming = list.filter { !it.dueDate.startsWith(today) }
+                        // When a filter other than "All" is active, skip the
+                        // today/upcoming split and show a flat list instead.
+                        val dueToday = list.filter { it.dueDate.startsWith(today) && selectedFilter == "All" }
+                        val upcoming = list.filter { !it.dueDate.startsWith(today) || selectedFilter != "All" }
+
+                        // Flat list used for non-"All" filters or active searches
+                        val showFlat = selectedFilter != "All" || searchQuery.isNotBlank()
+                        val flatList = list
 
                         LazyColumn(
                             modifier = Modifier.fillMaxWidth(),
                             verticalArrangement = Arrangement.spacedBy(16.dp),
                             contentPadding = PaddingValues(bottom = 80.dp)
                         ) {
-                            if (dueToday.isNotEmpty()) {
+                            // ── Empty state ───────────────────────────────────
+                            if (list.isEmpty()) {
+                                item {
+                                    Box(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(vertical = 48.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Rounded.SearchOff,
+                                                contentDescription = null,
+                                                tint = Color.Gray.copy(alpha = 0.5f),
+                                                modifier = Modifier.size(52.dp)
+                                            )
+                                            Text(
+                                                text = if (searchQuery.isNotBlank())
+                                                    "No results for \"$searchQuery\""
+                                                else
+                                                    "No ${selectedFilter.lowercase()} assignments",
+                                                color = Color.Gray,
+                                                fontSize = 15.sp,
+                                                fontWeight = FontWeight.Medium
+                                            )
+                                            if (searchQuery.isNotBlank() || selectedFilter != "All") {
+                                                Text(
+                                                    text = "Try a different search or filter",
+                                                    color = Color.Gray.copy(alpha = 0.6f),
+                                                    fontSize = 13.sp
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // ── Flat list (when filter / search is active) ────
+                            if (showFlat && flatList.isNotEmpty()) {
                                 item {
                                     Text(
-                                        "Due Today",
-                                        fontSize = 18.sp, fontWeight = FontWeight.Bold, color = textPrimary,
+                                        text = when (selectedFilter) {
+                                            "Pending"   -> "Pending  (${flatList.size})"
+                                            "Completed" -> "Completed  (${flatList.size})"
+                                            "Overdue"   -> "Overdue  (${flatList.size})"
+                                            else        -> "Results  (${flatList.size})"
+                                        },
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = textPrimary,
                                         modifier = Modifier.padding(bottom = 8.dp)
                                     )
                                 }
-                                items(dueToday) { assignment ->
-                                    AssignmentCard(assignment, isDarkTheme,
+                                items(flatList, key = { it.id }) { assignment ->
+                                    AssignmentCard(
+                                        assignment = assignment,
+                                        isDarkTheme = isDarkTheme,
                                         onComplete = { viewModel.markComplete(assignment.id) },
-                                        onDelete = { viewModel.deleteAssignment(assignment.id) }
+                                        onDelete   = { viewModel.deleteAssignment(assignment.id) }
                                     )
                                 }
                             }
 
-                            item {
-                                Text(
-                                    "Upcoming",
-                                    fontSize = 18.sp, fontWeight = FontWeight.Bold, color = textPrimary,
-                                    modifier = Modifier.padding(bottom = 8.dp, top = 8.dp)
-                                )
-                            }
-                            if (upcoming.isEmpty()) {
+                            // ── Grouped view (default "All" with no search) ───
+                            if (!showFlat) {
+                                if (dueToday.isNotEmpty()) {
+                                    item {
+                                        Text(
+                                            "Due Today  (${dueToday.size})",
+                                            fontSize = 18.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = textPrimary,
+                                            modifier = Modifier.padding(bottom = 8.dp)
+                                        )
+                                    }
+                                    items(dueToday, key = { it.id }) { assignment ->
+                                        AssignmentCard(
+                                            assignment = assignment,
+                                            isDarkTheme = isDarkTheme,
+                                            onComplete = { viewModel.markComplete(assignment.id) },
+                                            onDelete   = { viewModel.deleteAssignment(assignment.id) }
+                                        )
+                                    }
+                                }
+
+                                val upcomingOnly = list.filter { !it.dueDate.startsWith(today) }
                                 item {
                                     Text(
-                                        "No upcoming assignments 🎉",
-                                        color = Color.Gray, fontSize = 14.sp,
-                                        modifier = Modifier.padding(vertical = 16.dp)
+                                        "Upcoming  (${upcomingOnly.size})",
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = textPrimary,
+                                        modifier = Modifier.padding(
+                                            bottom = 8.dp,
+                                            top = if (dueToday.isNotEmpty()) 8.dp else 0.dp
+                                        )
                                     )
                                 }
-                            } else {
-                                items(upcoming) { assignment ->
-                                    AssignmentCard(assignment, isDarkTheme,
-                                        onComplete = { viewModel.markComplete(assignment.id) },
-                                        onDelete = { viewModel.deleteAssignment(assignment.id) }
-                                    )
+                                if (upcomingOnly.isEmpty()) {
+                                    item {
+                                        Text(
+                                            "No upcoming assignments 🎉",
+                                            color = Color.Gray,
+                                            fontSize = 14.sp,
+                                            modifier = Modifier.padding(vertical = 8.dp)
+                                        )
+                                    }
+                                } else {
+                                    items(upcomingOnly, key = { it.id }) { assignment ->
+                                        AssignmentCard(
+                                            assignment = assignment,
+                                            isDarkTheme = isDarkTheme,
+                                            onComplete = { viewModel.markComplete(assignment.id) },
+                                            onDelete   = { viewModel.deleteAssignment(assignment.id) }
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -177,7 +325,7 @@ fun AssignmentListScreen(
 // --- Components ---
 
 @Composable
-fun HeaderSection(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
+fun HeaderSection(isDarkTheme: Boolean, onThemeToggle: () -> Unit, subtitle: String = "") {
     Row(
         modifier = Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
@@ -191,7 +339,7 @@ fun HeaderSection(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
                 color = if (isDarkTheme) TextDark else TextLight
             )
             Text(
-                text = "You have 4 tasks due soon.",
+                text = subtitle.ifBlank { "Track and manage your assignments" },
                 fontSize = 14.sp,
                 color = if (isDarkTheme) Color.Gray else Color.Gray
             )
@@ -240,25 +388,34 @@ fun HeaderSection(isDarkTheme: Boolean, onThemeToggle: () -> Unit) {
 }
 
 @Composable
-fun SearchBar(isDarkTheme: Boolean) {
+fun SearchBar(
+    isDarkTheme: Boolean,
+    query: String = "",
+    onQueryChange: (String) -> Unit = {}
+) {
     val backgroundColor = if (isDarkTheme) SurfaceDark else SurfaceLight
     val contentColor = if (isDarkTheme) TextDark else TextLight
 
     Box(modifier = Modifier.fillMaxWidth()) {
         TextField(
-            value = "",
-            onValueChange = {},
+            value = query,
+            onValueChange = onQueryChange,
             placeholder = { Text("Search tasks, subjects...", color = Color.Gray) },
             leadingIcon = { Icon(Icons.Rounded.Search, contentDescription = null, tint = Color.Gray) },
             trailingIcon = {
-                Box(
-                    modifier = Modifier
-                        .size(32.dp)
-                        .background(if (isDarkTheme) Color(0xFF374151) else Color(0xFFf3f4f6), RoundedCornerShape(8.dp))
-                        .clickable { },
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(Icons.Rounded.Tune, contentDescription = "Filter", tint = Color.Gray, modifier = Modifier.size(18.dp))
+                if (query.isNotEmpty()) {
+                    IconButton(onClick = { onQueryChange("") }) {
+                        Icon(Icons.Rounded.Close, contentDescription = "Clear search", tint = Color.Gray, modifier = Modifier.size(18.dp))
+                    }
+                } else {
+                    Box(
+                        modifier = Modifier
+                            .size(32.dp)
+                            .background(if (isDarkTheme) Color(0xFF374151) else Color(0xFFf3f4f6), RoundedCornerShape(8.dp)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(Icons.Rounded.Tune, contentDescription = "Filter", tint = Color.Gray, modifier = Modifier.size(18.dp))
+                    }
                 }
             },
             colors = TextFieldDefaults.colors(
@@ -280,27 +437,33 @@ fun SearchBar(isDarkTheme: Boolean) {
 }
 
 @Composable
-fun FilterSection(isDarkTheme: Boolean) {
+fun FilterSection(
+    isDarkTheme: Boolean,
+    selectedFilter: String = "All",
+    onFilterSelected: (String) -> Unit = {}
+) {
     val filters = listOf("All", "Pending", "Completed", "Overdue")
     LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
         items(filters) { filter ->
-            val isSelected = filter == "All"
-            val backgroundColor = if (isSelected) PrimaryColor else if (isDarkTheme) SurfaceDark else SurfaceLight
-            val textColor = if (isSelected) Color.White else if (isDarkTheme) Color(0xFFd1d5db) else Color(0xFF4b5563)
-            val border = if (isSelected) null else if (isDarkTheme)  androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF374151)) else androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFe5e7eb))
+            val isSelected = filter == selectedFilter
+            val bgColor   = if (isSelected) PrimaryColor else if (isDarkTheme) SurfaceDark else SurfaceLight
+            val textColor = if (isSelected) Color.White  else if (isDarkTheme) Color(0xFFd1d5db) else Color(0xFF4b5563)
+            val border    = if (isSelected) null
+                            else if (isDarkTheme) androidx.compose.foundation.BorderStroke(1.dp, Color(0xFF374151))
+                            else androidx.compose.foundation.BorderStroke(1.dp, Color(0xFFe5e7eb))
 
             Box(
                 modifier = Modifier
                     .clip(RoundedCornerShape(50))
                     .then(if (border != null) Modifier.border(border, RoundedCornerShape(50)) else Modifier)
-                    .background(backgroundColor)
-                    .clickable { }
+                    .background(bgColor)
+                    .clickable { onFilterSelected(filter) }
                     .padding(horizontal = 20.dp, vertical = 8.dp)
             ) {
                 Text(
-                    text = filter,
-                    color = textColor,
-                    fontSize = 14.sp,
+                    text       = filter,
+                    color      = textColor,
+                    fontSize   = 14.sp,
                     fontWeight = FontWeight.Medium
                 )
             }

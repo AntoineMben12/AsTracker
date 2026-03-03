@@ -8,6 +8,9 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.buildJsonArray
+import io.github.jan.supabase.postgrest.query.Order
 import retrofit2.Response
 
 class SupabaseApiService : ApiService {
@@ -218,7 +221,7 @@ class SupabaseApiService : ApiService {
                     priority?.let { eq("priority", it) }
                     subject?.let  { eq("subject",  it) }
                 }
-                order("created_at", ascending = false)
+                order("created_at", Order.DESCENDING)
             }
             val data = result.decodeList<AssignmentDto>()
             Response.success(AssignmentListResponse(true, data.size, data))
@@ -302,8 +305,14 @@ class SupabaseApiService : ApiService {
 
     override suspend fun getNotifications(): Response<NotificationListResponse> {
         return try {
+            val user = auth.currentUserOrNull()
+                ?: return Response.error(401, errBody("Not authenticated"))
+
             val all = db.from("notifications")
-                .select { order("created_at", ascending = false) }
+                .select {
+                    filter { eq("user_id", user.id) }
+                    order("created_at", Order.DESCENDING)
+                }
                 .decodeList<NotificationDto>()
 
             val today     = todayStr()
@@ -357,6 +366,7 @@ class SupabaseApiService : ApiService {
             db.from("notifications").update(json) {
                 filter {
                     eq("user_id", user.id)
+                    // only update unread rows — avoids a no-op write on every row
                     eq("is_read", false)
                 }
             }
@@ -372,6 +382,41 @@ class SupabaseApiService : ApiService {
             Response.success(MessageResponse(true, "Notification deleted"))
         } catch (e: Exception) {
             Response.error(400, errBody(e.message ?: "Failed to delete notification"))
+        }
+    }
+
+    override suspend fun createNotification(request: CreateNotificationRequest): Response<NotificationResponse> {
+        return try {
+            val user = auth.currentUserOrNull()
+                ?: return Response.error(401, errBody("Not authenticated"))
+
+            // Build the actions JSON array so it serialises correctly into a jsonb column
+            val actionsJson: JsonArray = buildJsonArray {
+                request.actions.forEach { action ->
+                    add(buildJsonObject {
+                        put("label",      action.label)
+                        put("is_primary", action.isPrimary)
+                    })
+                }
+            }
+
+            val json = buildJsonObject {
+                put("user_id",   user.id)
+                put("title",     request.title)
+                put("body",      request.body)
+                put("bold_word", request.boldWord)
+                put("type",      request.type)
+                put("is_read",   false)
+                put("actions",   actionsJson)
+            }
+
+            val data = db.from("notifications")
+                .insert(json) { select() }
+                .decodeSingle<NotificationDto>()
+
+            Response.success(NotificationResponse(true, data))
+        } catch (e: Exception) {
+            Response.error(400, errBody(e.message ?: "Failed to create notification"))
         }
     }
 }

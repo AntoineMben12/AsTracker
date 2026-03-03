@@ -22,6 +22,7 @@ import com.example.astracker.ui.notification.NotificationScreen
 import com.example.astracker.ui.notification.NotificationViewModel
 import com.example.astracker.ui.profile.ProfileScreen
 import com.example.astracker.ui.profile.ProfileViewModel
+import com.example.astracker.ui.splash.SplashScreen
 import com.example.astracker.ui.theme.AsTrackerTheme
 import io.github.jan.supabase.auth.auth
 
@@ -29,7 +30,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            AsTrackerTheme {
+            AsTrackerTheme(darkTheme = true) {
                 AppNavigation()
             }
         }
@@ -51,20 +52,23 @@ fun AppNavigation() {
     val notificationViewModel: NotificationViewModel = viewModel(factory = factory)
     val profileViewModel:      ProfileViewModel      = viewModel(factory = factory)
 
-    // ── Session restoration ───────────────────────────────────────────────────
-    // If the Supabase SDK still holds a valid session (persisted on-device),
-    // skip the login screen and go straight to the assignment list.
-    LaunchedEffect(Unit) {
-        val session = SupabaseClientConfig.client.auth.currentSessionOrNull()
-        if (session != null) {
-            navController.navigate("assignmentList") {
-                popUpTo("login") { inclusive = true }
-            }
-        }
-    }
-
     // ── Navigation graph ──────────────────────────────────────────────────────
-    NavHost(navController = navController, startDestination = "login") {
+    NavHost(navController = navController, startDestination = "splash") {
+
+        // ── Splash ────────────────────────────────────────────────────────────
+        composable("splash") {
+            SplashScreen(
+                onSplashComplete = {
+                    // After the splash animation, check if a session already exists.
+                    // If yes, jump straight to the assignment list; otherwise go to login.
+                    val session = SupabaseClientConfig.client.auth.currentSessionOrNull()
+                    val destination = if (session != null) "assignmentList" else "login"
+                    navController.navigate(destination) {
+                        popUpTo("splash") { inclusive = true }
+                    }
+                }
+            )
+        }
 
         // ── Login ─────────────────────────────────────────────────────────────
         composable("login") {

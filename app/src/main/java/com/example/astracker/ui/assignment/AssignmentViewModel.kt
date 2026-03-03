@@ -8,13 +8,15 @@ import com.example.astracker.network.models.AssignmentStatsDto
 import com.example.astracker.network.models.CreateAssignmentRequest
 import com.example.astracker.network.models.SubtaskDto
 import com.example.astracker.ui.common.UiState
+import com.example.astracker.ui.notification.NotificationViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import java.util.Calendar
 
 class AssignmentViewModel(
-    private val repo: AssignmentRepository = AssignmentRepository()
+    private val repo         : AssignmentRepository  = AssignmentRepository(),
+    private val notifViewModel: NotificationViewModel? = null
 ) : ViewModel() {
 
     private val _assignments = MutableStateFlow<UiState<List<AssignmentDto>>>(UiState.Idle)
@@ -45,14 +47,14 @@ class AssignmentViewModel(
     }
 
     fun createAssignment(
-        title: String,
+        title      : String,
         description: String,
-        subject: String,
-        dueDate: String,        // Expected as ISO-8601 string, e.g. "2024-12-31T23:59:00+00:00"
-        priority: String,
-        subtasks: List<SubtaskDto> = emptyList(),
-        tags: List<String> = emptyList(),
-        type: String = "Assignment"
+        subject    : String,
+        dueDate    : String,        // Expected as ISO-8601 string, e.g. "2024-12-31T23:59:00+00:00"
+        priority   : String,
+        subtasks   : List<SubtaskDto> = emptyList(),
+        tags       : List<String>     = emptyList(),
+        type       : String           = "Assignment"
     ) {
         if (title.isBlank() || subject.isBlank() || dueDate.isBlank()) {
             _createState.value = UiState.Error("Title, subject and due date are required")
@@ -76,14 +78,35 @@ class AssignmentViewModel(
                 onSuccess = { UiState.Success(it) },
                 onFailure = { UiState.Error(it.message ?: "Failed to create assignment") }
             )
-            if (result.isSuccess) loadAll()
+            if (result.isSuccess) {
+                loadAll()
+                // Push a notification for the newly created assignment
+                val friendlyDue = friendlyDueDate(dueDate)
+                notifViewModel?.notifyNewAssignment(
+                    assignmentTitle = title.trim(),
+                    subject         = subject.trim(),
+                    dueDate         = friendlyDue
+                )
+            }
         }
     }
 
     fun markComplete(id: String) {
         viewModelScope.launch {
+            // Grab title + subject before updating so we can include them in the notification
+            val current = (_assignments.value as? UiState.Success)
+                ?.data?.firstOrNull { it.id == id }
+
             repo.update(id, mapOf("status" to "completed", "progress" to 100))
             loadAll()
+
+            // Push a completion notification if we have metadata
+            if (current != null) {
+                notifViewModel?.notifyCompleted(
+                    assignmentTitle = current.title.ifBlank { current.subject },
+                    subject         = current.subject
+                )
+            }
         }
     }
 
@@ -107,6 +130,24 @@ class AssignmentViewModel(
             c.get(Calendar.MONTH) + 1,
             c.get(Calendar.DAY_OF_MONTH)
         )
+    }
+
+    /**
+     * Converts an ISO-8601 due-date string into a short human-readable label,
+     * e.g. "2025-12-31T23:59:00" → "Dec 31, 2025".
+     */
+    private fun friendlyDueDate(isoDate: String): String {
+        val datePart = isoDate.take(10)           // "yyyy-MM-dd"
+        val parts    = datePart.split("-")
+        if (parts.size < 3) return datePart
+        val months = listOf(
+            "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+            "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+        )
+        val year  = parts[0]
+        val month = (parts[1].toIntOrNull() ?: 1) - 1
+        val day   = parts[2].toIntOrNull() ?: 0
+        return "${months.getOrElse(month) { "" }} $day, $year"
     }
 
     private fun computeStats(list: List<AssignmentDto>): AssignmentStatsDto {

@@ -46,6 +46,9 @@ interface ApiService {
     @GET("notifications")
     suspend fun getNotifications(): Response<NotificationListResponse>
 
+    @POST("notifications")
+    suspend fun createNotification(@Body request: CreateNotificationRequest): Response<NotificationResponse>
+
     @PUT("notifications/{id}/read")
     suspend fun markNotificationRead(@Path("id") id: String): Response<NotificationResponse>
 
